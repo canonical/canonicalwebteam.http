@@ -7,6 +7,8 @@ import requests
 import requests_cache
 
 try:
+    # If prometheus is available, set up metric counters
+
     import prometheus_client
     timeout_counter = prometheus_client.Counter(
         'feed_timeouts',
@@ -31,6 +33,10 @@ except ImportError:
 
 
 class TimeoutHTTPAdapter(requests.adapters.HTTPAdapter):
+    """
+    A simple extension to the HTTPAdapter to add a 'timeout' parameter
+    """
+
     def __init__(self, timeout=None, *args, **kwargs):
         self.timeout = timeout
         super().__init__(*args, **kwargs)
@@ -41,60 +47,49 @@ class TimeoutHTTPAdapter(requests.adapters.HTTPAdapter):
 
 
 class BaseSession():
-    """A base session interface to implement common functionality
-
-    Create an interface to manage exceptions and return API exceptions
     """
-    def __init__(self, timeout=(0.5, 3), *args, **kwargs):
+    A base session interface to implement common functionality:
+
+    - timeout: Set timeout for outgoing requests
+    - headers: Additional headers to add to all outgoing requests
+    """
+
+    def __init__(self, timeout=(0.5, 3), headers={}, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.mount("http://", TimeoutHTTPAdapter(timeout=timeout))
         self.mount("https://", TimeoutHTTPAdapter(timeout=timeout))
 
-        # TODO allow user to choose it's own user agent
-        storefront_header = 'storefront ({commit_hash};{environment})'.format(
-            commit_hash=os.getenv('COMMIT_ID', 'commit_id'),
-            environment=os.getenv('ENVIRONMENT', 'devel'),
-        )
-
-        headers = {
-            'User-Agent': storefront_header,
-        }
         self.headers.update(headers)
 
     def request(self, method, url, **kwargs):
-        domain = urlparse(url).netloc
-
-        try:
-            request = super().request(method=method, url=url, **kwargs)
-        except requests.exceptions.Timeout:
-            if timeout_counter:
-                timeout_counter.labels(domain=domain).inc()
-
-            raise ApiTimeoutError(
-                'The request to {} took too long'.format(url),
-            )
-        except requests.exceptions.ConnectionError:
-            if connection_failed_counter:
-                connection_failed_counter.labels(domain=domain).inc()
-
-            raise ApiConnectionError(
-                'Failed to establish connection to {}.'.format(url)
-            )
+        request = super().request(method=method, url=url, **kwargs)
 
         if latency_histogram:
             latency_histogram.labels(
-                domain=domain, code=request.status_code
+                domain=urlparse(url).netloc, code=request.status_code
             ).observe(request.elapsed.total_seconds())
 
         return request
 
 
 class UncachedSession(BaseSession, requests.Session):
+    """
+    A session object for making HTTP requests directly, using the default
+    settings from BaseSession
+    """
+
     pass
 
 
 class CachedSession(BaseSession, requests_cache.CachedSession):
+    """
+    A session object for making HTTP requests with cached responses.
+
+    Responses for an identical request will be naively returned from the
+    cache if the cached copy if less than "expire_after" seconds old.
+    """
+
     def __init__(
             self, *args,
             backend='sqlite', expire_after=5, include_get_headers=True,
