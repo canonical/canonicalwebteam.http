@@ -42,11 +42,11 @@ class TimeoutHTTPAdapter(requests.adapters.HTTPAdapter):
 
     def __init__(self, timeout=None, *args, **kwargs):
         self.timeout = timeout
-        super().__init__(*args, **kwargs)
+        super(TimeoutHTTPAdapter, self).__init__(*args, **kwargs)
 
     def send(self, *args, **kwargs):
         kwargs['timeout'] = self.timeout
-        return super().send(*args, **kwargs)
+        return super(TimeoutHTTPAdapter, self).send(*args, **kwargs)
 
 
 class BaseSession():
@@ -58,7 +58,7 @@ class BaseSession():
     """
 
     def __init__(self, timeout=(0.5, 3), headers={}, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super(BaseSession, self).__init__(*args, **kwargs)
 
         self.mount("http://", TimeoutHTTPAdapter(timeout=timeout))
         self.mount("https://", TimeoutHTTPAdapter(timeout=timeout))
@@ -67,7 +67,9 @@ class BaseSession():
 
     def request(self, method, url, **kwargs):
         try:
-            request = super().request(method=method, url=url, **kwargs)
+            request = super(BaseSession, self).request(
+                method=method, url=url, **kwargs
+            )
         except requests.exceptions.Timeout as timeout_error:
             if TIMEOUT_COUNTER:
                 TIMEOUT_COUNTER.labels(domain=domain).inc()
@@ -111,7 +113,7 @@ class CachedSession(BaseSession, requests_cache.CachedSession):
         **kwargs
     ):
 
-        super().__init__(
+        super(CachedSession, self).__init__(
             *args,
             backend=backend, expire_after=expire_after,
             include_get_headers=include_get_headers,

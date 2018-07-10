@@ -3,3 +3,4 @@ v0.1.0, 2018-07-10 -- Implement BaseSession, CachedSession, UncachedSession and 
 v0.1.1, 2018-07-10 -- Flake8 fixes
 v0.1.2, 2018-07-10 -- Fix python2 syntax error
 v0.1.3, 2018-07-10 -- Better python2 support; code style improvements
+v0.1.4, 2018-07-10 -- More python2 support
