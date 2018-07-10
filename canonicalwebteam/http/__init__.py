@@ -90,8 +90,9 @@ class CachedSession(BaseSession, requests_cache.CachedSession):
     """
 
     def __init__(
-        self, *args,
+        self,
         backend='sqlite', expire_after=5, include_get_headers=True,
+        *args,
         **kwargs
     ):
 
