@@ -1,5 +1,8 @@
 # Core packages
-from urllib.parse import urlparse
+try:
+    from urllib.parse import urlparse
+except ImportError:
+    from urlparse import urlparse
 
 # Third-party packages
 import requests
@@ -9,26 +12,27 @@ try:
     # If prometheus is available, set up metric counters
 
     import prometheus_client
-    timeout_counter = prometheus_client.Counter(
+
+    TIMEOUT_COUNTER = prometheus_client.Counter(
         'feed_timeouts',
         'A counter of timed out requests',
         ['domain'],
     )
-    connection_failed_counter = prometheus_client.Counter(
+    CONNECTION_FAILED_COUNTER = prometheus_client.Counter(
         'feed_connection_failures',
         'A counter of requests which failed to connect',
         ['domain'],
     )
-    latency_histogram = prometheus_client.Histogram(
+    LATENCY_HISTOGRAM = prometheus_client.Histogram(
         'feed_latency_seconds',
         'Feed requests retrieved',
         ['domain', 'code'],
         buckets=[0.25, 0.5, 0.75, 1, 2, 3],
     )
 except ImportError:
-    timeout_counter = None
-    connection_failed_counter = None
-    latency_histogram = None
+    TIMEOUT_COUNTER = None
+    CONNECTION_FAILED_COUNTER = None
+    LATENCY_HISTOGRAM = None
 
 
 class TimeoutHTTPAdapter(requests.adapters.HTTPAdapter):
@@ -62,10 +66,21 @@ class BaseSession():
         self.headers.update(headers)
 
     def request(self, method, url, **kwargs):
-        request = super().request(method=method, url=url, **kwargs)
+        try:
+            request = super().request(method=method, url=url, **kwargs)
+        except requests.exceptions.Timeout as timeout_error:
+            if TIMEOUT_COUNTER:
+                TIMEOUT_COUNTER.labels(domain=domain).inc()
 
-        if latency_histogram:
-            latency_histogram.labels(
+            raise timeout_error
+        except requests.exceptions.ConnectionError as connection_error:
+            if CONNECTION_FAILED_COUNTER:
+                CONNECTION_FAILED_COUNTER.labels(domain=domain).inc()
+
+            raise connection_error
+
+        if LATENCY_HISTOGRAM:
+            LATENCY_HISTOGRAM.labels(
                 domain=urlparse(url).netloc, code=request.status_code
             ).observe(request.elapsed.total_seconds())
 
