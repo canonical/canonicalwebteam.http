@@ -1,0 +1,10 @@
+env/
+*.egg-info
+__pycache__/
+dist/
+.cache/
+.eggs/
+pytestdebug.log
+.coverage
+htmlcov/
+*.pyc
