@@ -1,5 +1,4 @@
 # Core packages
-import os
 from urllib.parse import urlparse
 
 # Third-party packages
@@ -91,10 +90,10 @@ class CachedSession(BaseSession, requests_cache.CachedSession):
     """
 
     def __init__(
-            self, *args,
-            backend='sqlite', expire_after=5, include_get_headers=True,
-            **kwargs
-        ):
+        self, *args,
+        backend='sqlite', expire_after=5, include_get_headers=True,
+        **kwargs
+    ):
 
         super().__init__(
             *args,
@@ -102,4 +101,3 @@ class CachedSession(BaseSession, requests_cache.CachedSession):
             include_get_headers=include_get_headers,
             **kwargs
         )
-
