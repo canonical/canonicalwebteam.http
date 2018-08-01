@@ -49,7 +49,7 @@ class TimeoutHTTPAdapter(requests.adapters.HTTPAdapter):
         return super(TimeoutHTTPAdapter, self).send(*args, **kwargs)
 
 
-class BaseSession():
+class BaseSession(object):
     """
     A base session interface to implement common functionality:
 
