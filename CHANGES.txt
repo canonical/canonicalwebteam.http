@@ -5,3 +5,4 @@ v0.1.2, 2018-07-10 -- Fix python2 syntax error
 v0.1.3, 2018-07-10 -- Better python2 support; code style improvements
 v0.1.4, 2018-07-10 -- More python2 support
 v0.1.5, 2018-07-10 -- Ditto
+v0.1.6, 2018-08-01 -- Fix "domain undefined" error

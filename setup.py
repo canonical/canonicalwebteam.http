@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='canonicalwebteam.http',
-    version='0.1.5',
+    version='0.1.6',
     author='Canonical webteam',
     author_email='webteam@canonical.com',
     url='https://github.com/canonicalwebteam/http',

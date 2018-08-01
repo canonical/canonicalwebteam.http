@@ -66,6 +66,8 @@ class BaseSession(object):
         self.headers.update(headers)
 
     def request(self, method, url, **kwargs):
+        domain = urlparse(url).netloc
+
         try:
             request = super(BaseSession, self).request(
                 method=method, url=url, **kwargs
@@ -83,7 +85,7 @@ class BaseSession(object):
 
         if LATENCY_HISTOGRAM:
             LATENCY_HISTOGRAM.labels(
-                domain=urlparse(url).netloc, code=request.status_code
+                domain=domain, code=request.status_code
             ).observe(request.elapsed.total_seconds())
 
         return request
