@@ -5,8 +5,13 @@ except ImportError:
     from urlparse import urlparse
 
 # Third-party packages
+import redis
 import requests
-import requests_cache
+from cachecontrol import CacheControl, CacheControlAdapter
+from cachecontrol.caches import FileCache
+from cachecontrol.caches.redis_cache import RedisCache
+from cachecontrol.heuristics import ExpiresAfter
+from requests import adapters, session, Session
 
 try:
     # If prometheus is available, set up metric counters
@@ -14,19 +19,17 @@ try:
     import prometheus_client
 
     TIMEOUT_COUNTER = prometheus_client.Counter(
-        'feed_timeouts',
-        'A counter of timed out requests',
-        ['domain'],
+        "feed_timeouts", "A counter of timed out requests", ["domain"]
     )
     CONNECTION_FAILED_COUNTER = prometheus_client.Counter(
-        'feed_connection_failures',
-        'A counter of requests which failed to connect',
-        ['domain'],
+        "feed_connection_failures",
+        "A counter of requests which failed to connect",
+        ["domain"],
     )
     LATENCY_HISTOGRAM = prometheus_client.Histogram(
-        'feed_latency_seconds',
-        'Feed requests retrieved',
-        ['domain', 'code'],
+        "feed_latency_seconds",
+        "Feed requests retrieved",
+        ["domain", "code"],
         buckets=[0.25, 0.5, 0.75, 1, 2, 3],
     )
 except ImportError:
@@ -35,7 +38,7 @@ except ImportError:
     LATENCY_HISTOGRAM = None
 
 
-class TimeoutHTTPAdapter(requests.adapters.HTTPAdapter):
+class TimeoutHTTPAdapter(adapters.HTTPAdapter):
     """
     A simple extension to the HTTPAdapter to add a 'timeout' parameter
     """
@@ -45,7 +48,7 @@ class TimeoutHTTPAdapter(requests.adapters.HTTPAdapter):
         super(TimeoutHTTPAdapter, self).__init__(*args, **kwargs)
 
     def send(self, *args, **kwargs):
-        kwargs['timeout'] = self.timeout
+        kwargs["timeout"] = self.timeout
         return super(TimeoutHTTPAdapter, self).send(*args, **kwargs)
 
 
@@ -91,7 +94,7 @@ class BaseSession(object):
         return request
 
 
-class UncachedSession(BaseSession, requests.Session):
+class UncachedSession(BaseSession, Session):
     """
     A session object for making HTTP requests directly, using the default
     settings from BaseSession
@@ -100,24 +103,42 @@ class UncachedSession(BaseSession, requests.Session):
     pass
 
 
-class CachedSession(BaseSession, requests_cache.CachedSession):
+class CachedSession(BaseSession, Session):
     """
-    A session object for making HTTP requests with cached responses.
+    A session object that implements CacheControl functionality with
+    our default settings from BaseSession.
 
-    Responses for an identical request will be naively returned from the
-    cache if the cached copy if less than "expire_after" seconds old.
+    The session respects cache control headers to manage the caching strategy
+    and saves responses in a file or redis cache.
+    If CacheControl headers are not provided a custom duration time
+    for caching can be passed as a fallback strategy.
+
+    :param redis_cache_pool: Port of your Redis instance
+    :param file_cache_name: Name for the file to store cache on
+    :param fallback_cache_duration: Duration in seconds for fallback caching
+        retention when no CacheControl headers are set
     """
 
     def __init__(
         self,
-        backend='sqlite', expire_after=5, include_get_headers=True,
+        redis_cache_pool=None,
+        fallback_cache_duration=5,
+        file_cache_name=".webcache",
         *args,
         **kwargs
     ):
+        super(BaseSession, self).__init__(*args, **kwargs)
 
-        super(CachedSession, self).__init__(
-            *args,
-            backend=backend, expire_after=expire_after,
-            include_get_headers=include_get_headers,
-            **kwargs
-        )
+        heuristic = ExpiresAfter(seconds=fallback_cache_duration)
+        cache = None
+
+        if redis_cache_pool:
+            r = redis.Redis(connection_pool=redis_cache_pool)
+            cache = RedisCache(r)
+        else:
+            cache = FileCache(file_cache_name)
+
+        adapter = CacheControlAdapter(heuristic=heuristic, cache=cache)
+
+        self.mount("http://", adapter)
+        self.mount("https://", adapter)
