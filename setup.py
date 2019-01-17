@@ -20,5 +20,6 @@ setup(
         "redis>=3.0.1",
         "CacheControl>=0.12.5",
         "lockfile>=0.12.2",
+        "HTTPretty>=0.9.6",
     ],
 )

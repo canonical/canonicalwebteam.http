@@ -10,7 +10,7 @@ import requests
 from cachecontrol import CacheControl, CacheControlAdapter
 from cachecontrol.caches import FileCache
 from cachecontrol.caches.redis_cache import RedisCache
-from cachecontrol.heuristics import ExpiresAfter
+from canonicalwebteam.http.heuristics import ExpiresAfterIfNoCacheControl
 from requests import adapters, session, Session
 
 try:
@@ -114,7 +114,7 @@ class CachedSession(BaseSession, Session):
     for caching can be passed as a fallback strategy.
 
     :param redis_cache_pool: Port of your Redis instance
-    :param file_cache_name: Name for the file to store cache on
+    :param file_cache_directory: Name for the directory to store cache on
     :param fallback_cache_duration: Duration in seconds for fallback caching
         retention when no CacheControl headers are set
     """
@@ -123,20 +123,22 @@ class CachedSession(BaseSession, Session):
         self,
         redis_cache_pool=None,
         fallback_cache_duration=5,
-        file_cache_name=".webcache",
+        file_cache_directory=".webcache",
         *args,
         **kwargs
     ):
         super(BaseSession, self).__init__(*args, **kwargs)
 
-        heuristic = ExpiresAfter(seconds=fallback_cache_duration)
+        heuristic = ExpiresAfterIfNoCacheControl(
+            seconds=fallback_cache_duration
+        )
         cache = None
 
         if redis_cache_pool:
             r = redis.Redis(connection_pool=redis_cache_pool)
             cache = RedisCache(r)
         else:
-            cache = FileCache(file_cache_name)
+            cache = FileCache(file_cache_directory)
 
         adapter = CacheControlAdapter(heuristic=heuristic, cache=cache)
 
