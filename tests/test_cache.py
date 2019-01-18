@@ -1,10 +1,13 @@
 import httpretty
 import json
+import os
+import pickle
 import redis
+import requests
 import shutil
+import struct
 import time
 import unittest
-import requests
 from cachecontrol.caches.file_cache import FileCache
 from cachecontrol.caches.redis_cache import RedisCache
 from canonicalwebteam.http import CachedSession
@@ -128,18 +131,47 @@ class TestCachedSession(unittest.TestCase):
         self.assertNotEqual(response[0].text, response[1].text)
         self.assertNotEqual(response[1].text, response[2].text)
 
-    # def test_file_cache(self):
-    #     session = CachedSession()
-    #     adapter = session.get_adapter("http://")
-    #     cache = adapter.cache
-    #     self.assertIsInstance(cache, FileCache)
+    @httpretty.activate
+    def test_file_cache(self):
+        epoch = time.time()
+        httpretty.register_uri(
+            httpretty.GET,
+            "https://now.httpbin.org",
+            body=json.dumps({"epoch": epoch}),
+        )
 
-    # def test_redis_cache(self):
-    #     pool = create_redis_connection_pool()
-    #     session = CachedSession(redis_cache_pool=pool)
-    #     adapter = session.get_adapter("http://")
-    #     cache = adapter.cache
-    #     self.assertIsInstance(cache, RedisCache)
+        session = CachedSession(file_cache_directory=file_cache_directory)
+
+        resp = session.get("https://now.httpbin.org")
+
+        file_path = None
+        for root, dirs, files in os.walk(file_cache_directory):
+            if files:
+                file_path = (
+                    root
+                    + "/"
+                    + files[
+                        0  # there can only be one cache file in this test.
+                    ]
+                )
+
+        content = None
+
+        with open(file_path, "rb") as file:
+            raw_file_content = file.read()
+            content = raw_file_content
+
+        epoch_in_bytes = bytearray(struct.pack("f", epoch))
+
+        self.assertNotEqual(file, None)
+        self.assertIn(str(epoch), str(content))
+
+    def test_redis_cache(self):
+        pool = create_redis_connection_pool()
+        session = CachedSession(redis_cache_pool=pool)
+        adapter = session.get_adapter("http://")
+        cache = adapter.cache
+        self.assertIsInstance(cache, RedisCache)
 
 
 if __name__ == "__main__":
