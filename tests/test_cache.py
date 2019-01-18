@@ -12,17 +12,26 @@ from cachecontrol.caches.file_cache import FileCache
 from cachecontrol.caches.redis_cache import RedisCache
 from canonicalwebteam.http import CachedSession
 from datetime import timedelta
+from mockredis import mock_redis_client
+from unittest.mock import patch
+
 
 file_cache_directory = ".testcache"
 
 
-def create_redis_connection_pool(
-    redis_port="6379", redis_host="localhost", redis_db=0
-):
-    return redis.ConnectionPool(host=redis_host, port=redis_port, db=redis_db)
+class MockRedisSingleton:
+    def __init__(self):
+        self.redis_client = None
+
+    def mock_redis_client_singleton(self, *args, **kwargs):
+        if not self.redis_client:
+            self.redis_client = mock_redis_client()
+        return self.redis_client
 
 
 class TestCachedSession(unittest.TestCase):
+    mock_redis_singleton = MockRedisSingleton()
+
     def tearDown(self):
         try:
             shutil.rmtree(file_cache_directory)
@@ -145,33 +154,61 @@ class TestCachedSession(unittest.TestCase):
         resp = session.get("https://now.httpbin.org")
 
         file_path = None
-        for root, dirs, files in os.walk(file_cache_directory):
-            if files:
-                file_path = (
-                    root
-                    + "/"
-                    + files[
-                        0  # there can only be one cache file in this test.
-                    ]
-                )
+
+        if os.path.isfile(file_cache_directory):
+            file_path = file_cache_directory
+        else:
+            for root, dirs, files in os.walk(file_cache_directory):
+                if files:
+                    file_path = (
+                        root
+                        + "/"
+                        + files[
+                            0
+                        ]  # there can only be one cache file in this test.
+                    )
 
         content = None
 
         with open(file_path, "rb") as file:
-            raw_file_content = file.read()
-            content = raw_file_content
-
-        epoch_in_bytes = bytearray(struct.pack("f", epoch))
+            content = file.read()
 
         self.assertNotEqual(file, None)
-        self.assertIn(str(epoch), str(content))
+        self.assertIn(str(resp.text), str(content))
 
+    @httpretty.activate
+    @patch("redis.Redis", mock_redis_singleton.mock_redis_client_singleton)
     def test_redis_cache(self):
-        pool = create_redis_connection_pool()
-        session = CachedSession(redis_cache_pool=pool)
-        adapter = session.get_adapter("http://")
-        cache = adapter.cache
-        self.assertIsInstance(cache, RedisCache)
+        redis_mock = redis.Redis()
+
+        epoch = time.time()
+        httpretty.register_uri(
+            httpretty.GET,
+            "https://now.httpbin.org",
+            body=json.dumps({"epoch": epoch}),
+            adding_headers={"Cache-Control": "max-age=300"},
+        )
+
+        session = CachedSession(redis_connection_pool=redis_mock)
+        resp = session.get("https://now.httpbin.org")
+
+        cursor, keys = redis_mock.scan()
+        cached_response_key = keys[
+            0
+        ]  # we can expect that only one response was sent and cached
+
+        cached_response = redis_mock.get(cached_response_key)
+        self.assertIn(str(resp.text), str(cached_response))
+
+        # Make sure not to mess with the byte structure here
+        # replace with a same length string
+        new_response = cached_response.replace(
+            bytes("epoch", "utf-8"), bytes("qmaks", "utf-8")
+        )
+        redis_mock.set(cached_response_key, new_response)
+        resp2 = session.get("https://now.httpbin.org")
+
+        self.assertIn("qmaks", resp2.text)
 
 
 if __name__ == "__main__":

@@ -16,10 +16,11 @@ setup(
     ),
     long_description=open("README.rst").read(),
     install_requires=[
-        "requests>=2.21.0",
-        "redis>=3.0.1",
         "CacheControl>=0.12.5",
-        "lockfile>=0.12.2",
         "HTTPretty>=0.9.6",
+        "lockfile>=0.12.2",
+        "mockredispy>=2.9.3",
+        "redis>=3.0.1",
+        "requests>=2.21.0",
     ],
 )

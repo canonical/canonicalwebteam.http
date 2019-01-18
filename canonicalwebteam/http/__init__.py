@@ -113,7 +113,7 @@ class CachedSession(BaseSession, Session):
     If CacheControl headers are not provided a custom duration time
     for caching can be passed as a fallback strategy.
 
-    :param redis_cache_pool: Port of your Redis instance
+    :param redis_connection_pool: Port of your Redis instance
     :param file_cache_directory: Name for the directory to store cache on
     :param fallback_cache_duration: Duration in seconds for fallback caching
         retention when no CacheControl headers are set
@@ -121,7 +121,7 @@ class CachedSession(BaseSession, Session):
 
     def __init__(
         self,
-        redis_cache_pool=None,
+        redis_connection_pool=None,
         fallback_cache_duration=5,
         file_cache_directory=".webcache",
         *args,
@@ -134,8 +134,8 @@ class CachedSession(BaseSession, Session):
         )
         cache = None
 
-        if redis_cache_pool:
-            r = redis.Redis(connection_pool=redis_cache_pool)
+        if redis_connection_pool:
+            r = redis.Redis(connection_pool=redis_connection_pool)
             cache = RedisCache(r)
         else:
             cache = FileCache(file_cache_directory)
