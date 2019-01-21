@@ -19,18 +19,24 @@ from unittest.mock import patch
 file_cache_directory = ".testcache"
 
 
-class MockRedisSingleton:
+class MockRedisSingletons:
     def __init__(self):
-        self.redis_client = None
+        self.redis_clients = {}
 
-    def mock_redis_client_singleton(self, *args, **kwargs):
-        if not self.redis_client:
-            self.redis_client = mock_redis_client()
-        return self.redis_client
+    def mock_redis_client_singleton(self, connection_pool, *args, **kwargs):
+
+        # A name has to passed into the connection pool, this will make sure
+        # that different Redis instances can be mocked
+        name = connection_pool.name
+
+        if name not in self.redis_clients:
+            self.redis_clients[name] = mock_redis_client()
+            self.redis_clients[name].name = name
+        return self.redis_clients[name]
 
 
 class TestCachedSession(unittest.TestCase):
-    mock_redis_singleton = MockRedisSingleton()
+    mock_redis_singletons = MockRedisSingletons()
 
     def tearDown(self):
         try:
@@ -55,15 +61,15 @@ class TestCachedSession(unittest.TestCase):
         # with a 2s retention, and a 1.1s time between requests, 2 of the
         # request should have the same epoch, where as the 3rd gets fresh data
         # the first requests gets send at t=0
-        response = []
 
-        for i in range(3):
-            resp = session.get("https://now.httpbin.org")
-            response.append(resp)
-            time.sleep(1.1)
+        response_1 = session.get("https://now.httpbin.org")
+        time.sleep(1.5)
+        response_2 = session.get("https://now.httpbin.org")
+        time.sleep(0.7)
+        response_3 = session.get("https://now.httpbin.org")
 
-        self.assertEqual(response[0].text, response[1].text)
-        self.assertNotEqual(response[1].text, response[2].text)
+        self.assertEqual(response_1.text, response_2.text)
+        self.assertNotEqual(response_2.text, response_3.text)
 
     @httpretty.activate
     def test_default_heuristic(self):
@@ -76,18 +82,14 @@ class TestCachedSession(unittest.TestCase):
 
         session = CachedSession(file_cache_directory=file_cache_directory)
 
-        # with default 5s retention, and a 2.6s time between requests, 2 of the
-        # request should have the same epoch, where as the 3rd gets fresh data
-        # the first requests gets send at t=0
-        response = []
+        response_1 = session.get("https://now.httpbin.org")
+        time.sleep(2)
+        response_2 = session.get("https://now.httpbin.org")
+        time.sleep(3.1)
+        response_3 = session.get("https://now.httpbin.org")
 
-        for i in range(3):
-            resp = session.get("https://now.httpbin.org")
-            response.append(resp)
-            time.sleep(2.6)
-
-        self.assertEqual(response[0].text, response[1].text)
-        self.assertNotEqual(response[1].text, response[2].text)
+        self.assertEqual(response_1.text, response_2.text)
+        self.assertNotEqual(response_2.text, response_3.text)
 
     @httpretty.activate
     def test_cache_control_max_age_overwrites_custom_heuristic(self):
@@ -98,23 +100,19 @@ class TestCachedSession(unittest.TestCase):
             httpretty.GET,
             "https://now.httpbin.org",
             body=request_callback,
-            adding_headers={"Cache-Control": "max-age=3"},
+            adding_headers={"Cache-Control": "max-age=2"},
         )
 
         session = CachedSession(file_cache_directory=file_cache_directory)
 
-        # with 3s retention from CC, and a 1.6s time between requests, 2 of the
-        # request should have the same epoch, where as the 3rd gets fresh data
-        # the first requests gets send at t=0
-        response = []
+        response_1 = session.get("https://now.httpbin.org")
+        time.sleep(1.1)
+        response_2 = session.get("https://now.httpbin.org")
+        time.sleep(1.1)
+        response_3 = session.get("https://now.httpbin.org")
 
-        for i in range(3):
-            resp = session.get("https://now.httpbin.org")
-            response.append(resp)
-            time.sleep(1.6)
-
-        self.assertEqual(response[0].text, response[1].text)
-        self.assertNotEqual(response[1].text, response[2].text)
+        self.assertEqual(response_1.text, response_2.text)
+        self.assertNotEqual(response_2.text, response_3.text)
 
     @httpretty.activate
     def test_cache_control_no_cache_overwrites_custom_heuristic(self):
@@ -131,84 +129,117 @@ class TestCachedSession(unittest.TestCase):
 
         # with no-cache set, no request should be cached,
         # thus all bodies are different
-        response = []
+        response_1 = session.get("https://now.httpbin.org")
+        time.sleep(0.1)
+        response_2 = session.get("https://now.httpbin.org")
+        time.sleep(0.1)
+        response_3 = session.get("https://now.httpbin.org")
 
-        for i in range(3):
-            resp = session.get("https://now.httpbin.org")
-            response.append(resp)
-
-        self.assertNotEqual(response[0].text, response[1].text)
-        self.assertNotEqual(response[1].text, response[2].text)
+        self.assertNotEqual(response_1.text, response_2.text)
+        self.assertNotEqual(response_2.text, response_3.text)
 
     @httpretty.activate
     def test_file_cache(self):
-        epoch = time.time()
+        def request_callback(request, uri, response_headers):
+            return [200, response_headers, json.dumps({"epoch": time.time()})]
+
         httpretty.register_uri(
-            httpretty.GET,
-            "https://now.httpbin.org",
-            body=json.dumps({"epoch": epoch}),
+            httpretty.GET, "https://now.httpbin.org", body=request_callback
         )
 
-        session = CachedSession(file_cache_directory=file_cache_directory)
+        cache_dir_1 = ".test1"
+        cache_dir_2 = ".test2"
 
-        resp = session.get("https://now.httpbin.org")
+        session_1 = CachedSession(
+            file_cache_directory=cache_dir_1, fallback_cache_duration=2000
+        )
+        session_2 = CachedSession(file_cache_directory=cache_dir_2)
 
-        file_path = None
+        resp_1 = session_1.get("https://now.httpbin.org")
 
-        if os.path.isfile(file_cache_directory):
-            file_path = file_cache_directory
-        else:
-            for root, dirs, files in os.walk(file_cache_directory):
-                if files:
-                    file_path = (
-                        root
-                        + "/"
-                        + files[
-                            0
-                        ]  # there can only be one cache file in this test.
-                    )
+        self.assertEqual(os.path.isdir(cache_dir_1), True)
 
-        content = None
+        resp_2 = session_2.get("https://now.httpbin.org")
 
-        with open(file_path, "rb") as file:
-            content = file.read()
+        self.assertEqual(os.path.isdir(cache_dir_2), True)
+        self.assertNotEqual(resp_1.text, resp_2.text)
 
-        self.assertNotEqual(file, None)
-        self.assertIn(str(resp.text), str(content))
+        try:
+            shutil.rmtree(cache_dir_2)
+        except:
+            pass
+
+        self.assertEqual(os.path.isdir(cache_dir_2), False)
+
+        resp_3 = session_2.get("https://now.httpbin.org")
+
+        self.assertEqual(os.path.isdir(cache_dir_2), True)
+        self.assertNotEqual(resp_2.text, resp_3.text)
+
+        session_3 = CachedSession(
+            file_cache_directory=cache_dir_1, fallback_cache_duration=2000
+        )
+
+        resp_4 = session_3.get("https://now.httpbin.org")
+
+        self.assertEqual(resp_1.text, resp_4.text)
+
+        try:
+            shutil.rmtree(cache_dir_1)
+            shutil.rmtree(cache_dir_2)
+        except:
+            pass
 
     @httpretty.activate
-    @patch("redis.Redis", mock_redis_singleton.mock_redis_client_singleton)
+    @patch("redis.Redis", mock_redis_singletons.mock_redis_client_singleton)
     def test_redis_cache(self):
-        redis_mock = redis.Redis()
+        class FakeConnectionPool:
+            def __init__(self, name):
+                self.name = name
 
-        epoch = time.time()
+        # our mock will be called here. Passing a connection_pool with a name
+        # makes sure that we can identify the different redis mocks
+
+        redis_mock_1 = redis.Redis(
+            connection_pool=FakeConnectionPool(name="test1")
+        )
+        redis_mock_2 = redis.Redis(
+            connection_pool=FakeConnectionPool(name="test2")
+        )
+
+        self.assertNotEqual(redis_mock_1, redis_mock_2)
+
+        def request_callback(request, uri, response_headers):
+            return [200, response_headers, json.dumps({"epoch": time.time()})]
+
         httpretty.register_uri(
-            httpretty.GET,
-            "https://now.httpbin.org",
-            body=json.dumps({"epoch": epoch}),
-            adding_headers={"Cache-Control": "max-age=300"},
+            httpretty.GET, "https://now.httpbin.org", body=request_callback
+        )
+        session_1 = CachedSession(
+            redis_connection_pool=redis_mock_1, fallback_cache_duration=500
+        )
+        session_2 = CachedSession(
+            redis_connection_pool=redis_mock_2, fallback_cache_duration=1
         )
 
-        session = CachedSession(redis_connection_pool=redis_mock)
-        resp = session.get("https://now.httpbin.org")
+        resp_1 = session_1.get("https://now.httpbin.org")
+        resp_2 = session_2.get("https://now.httpbin.org")
 
-        cursor, keys = redis_mock.scan()
-        cached_response_key = keys[
-            0
-        ]  # we can expect that only one response was sent and cached
+        self.assertNotEqual(resp_1.text, resp_2.text)
 
-        cached_response = redis_mock.get(cached_response_key)
-        self.assertIn(str(resp.text), str(cached_response))
+        time.sleep(1.1)
 
-        # Make sure not to mess with the byte structure here
-        # replace with a same length string
-        new_response = cached_response.replace(
-            bytes("epoch", "utf-8"), bytes("qmaks", "utf-8")
+        resp_3 = session_2.get("https://now.httpbin.org")
+
+        self.assertNotEqual(resp_2.text, resp_3.text)
+
+        session_3 = CachedSession(
+            redis_connection_pool=redis_mock_1, fallback_cache_duration=1
         )
-        redis_mock.set(cached_response_key, new_response)
-        resp2 = session.get("https://now.httpbin.org")
 
-        self.assertIn("qmaks", resp2.text)
+        resp_4 = session_3.get("https://now.httpbin.org")
+
+        self.assertEqual(resp_1.text, resp_4.text)
 
 
 if __name__ == "__main__":
