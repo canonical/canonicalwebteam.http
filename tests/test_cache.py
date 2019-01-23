@@ -216,10 +216,10 @@ class TestCachedSession(unittest.TestCase):
             httpretty.GET, "https://now.httpbin.org", body=request_callback
         )
         session_1 = CachedSession(
-            redis_connection_pool=redis_mock_1, fallback_cache_duration=500
+            redis_connection=redis_mock_1, fallback_cache_duration=500
         )
         session_2 = CachedSession(
-            redis_connection_pool=redis_mock_2, fallback_cache_duration=1
+            redis_connection=redis_mock_2, fallback_cache_duration=1
         )
 
         resp_1 = session_1.get("https://now.httpbin.org")
@@ -234,7 +234,7 @@ class TestCachedSession(unittest.TestCase):
         self.assertNotEqual(resp_2.text, resp_3.text)
 
         session_3 = CachedSession(
-            redis_connection_pool=redis_mock_1, fallback_cache_duration=1
+            redis_connection=redis_mock_1, fallback_cache_duration=1
         )
 
         resp_4 = session_3.get("https://now.httpbin.org")

@@ -5,7 +5,6 @@ except ImportError:
     from urlparse import urlparse
 
 # Third-party packages
-import redis
 import requests
 from cachecontrol import CacheControl, CacheControlAdapter
 from cachecontrol.caches import FileCache
@@ -103,44 +102,61 @@ class UncachedSession(BaseSession, Session):
     pass
 
 
+class CacheAdapterWithTimeout(CacheControlAdapter):
+    """
+    A combination of the CacheControl and Timeout adapter
+    to provide both functionalities.
+    """
+
+    def __init__(self, heuristic, cache, timeout=None, *args, **kwargs):
+        self.timeout = timeout
+        self.cache_control_adapter = CacheControlAdapter(
+            heuristic=heuristic, cache=cache
+        )
+
+    def send(self, *args, **kwargs):
+        kwargs["timeout"] = self.timeout
+        return self.cache_control_adapter.send(*args, **kwargs)
+
+
 class CachedSession(BaseSession, Session):
     """
-    A session object that implements CacheControl functionality with
-    our default settings from BaseSession.
+     A session object that implements CacheControl functionality with
+     our default settings from BaseSession.
 
-    The session respects cache control headers to manage the caching strategy
-    and saves responses in a file or redis cache.
-    If CacheControl headers are not provided a custom duration time
-    for caching can be passed as a fallback strategy.
+     The session respects cache control headers to manage the caching strategy
+     and saves responses in a file or redis cache.
+     If CacheControl headers are not provided a custom duration time
+     for caching can be passed as a fallback strategy.
 
-    :param redis_connection_pool: Port of your Redis instance
-    :param file_cache_directory: Name for the directory to store cache on
-    :param fallback_cache_duration: Duration in seconds for fallback caching
-        retention when no CacheControl headers are set
-    """
+     :param redis_connection_pool: Port of your Redis instance
+     :param file_cache_directory: Name for the directory to store cache on
+     :param fallback_cache_duration: Duration in seconds for fallback caching
+         retention when no CacheControl headers are set
+     :param timeout: Set the timeout for outgoing requests
+     """
 
     def __init__(
         self,
-        redis_connection_pool=None,
+        redis_connection=None,
         fallback_cache_duration=5,
         file_cache_directory=".webcache",
+        timeout=(0.5, 3),
         *args,
         **kwargs
     ):
-        super(BaseSession, self).__init__(*args, **kwargs)
-
         heuristic = ExpiresAfterIfNoCacheControl(
             seconds=fallback_cache_duration
         )
-        cache = None
+        super(CachedSession, self).__init__(*args, **kwargs)
+        cache = FileCache(file_cache_directory)
 
-        if redis_connection_pool:
-            r = redis.Redis(connection_pool=redis_connection_pool)
-            cache = RedisCache(r)
-        else:
-            cache = FileCache(file_cache_directory)
+        if redis_connection:
+            cache = RedisCache(redis_connection)
 
-        adapter = CacheControlAdapter(heuristic=heuristic, cache=cache)
+        adapter = CacheAdapterWithTimeout(
+            heuristic=heuristic, cache=cache, timeout=timeout
+        )
 
         self.mount("http://", adapter)
         self.mount("https://", adapter)
