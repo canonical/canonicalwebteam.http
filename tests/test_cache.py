@@ -1,20 +1,20 @@
-import httpretty
 import json
 import os
-import pickle
-import redis
-import requests
 import shutil
 import struct
 import time
 import unittest
-from cachecontrol.caches.file_cache import FileCache
-from cachecontrol.caches.redis_cache import RedisCache
-from canonicalwebteam.http import CachedSession
 from datetime import timedelta
-from mockredis import mock_redis_client
 from unittest.mock import patch
 
+import redis
+import requests
+from canonicalwebteam.http import CachedSession
+
+import httpretty
+from cachecontrol.caches.file_cache import FileCache
+from cachecontrol.caches.redis_cache import RedisCache
+from mockredis import mock_redis_client
 
 file_cache_directory = ".testcache"
 
