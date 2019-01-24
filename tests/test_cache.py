@@ -14,6 +14,7 @@ from canonicalwebteam.http import CachedSession
 import httpretty
 from cachecontrol.caches.file_cache import FileCache
 from cachecontrol.caches.redis_cache import RedisCache
+from freezegun import freeze_time
 from mockredis import mock_redis_client
 
 file_cache_directory = ".testcache"
@@ -62,14 +63,17 @@ class TestCachedSession(unittest.TestCase):
         # request should have the same epoch, where as the 3rd gets fresh data
         # the first requests gets send at t=0
 
-        response_1 = session.get("https://now.httpbin.org")
-        time.sleep(1.5)
-        response_2 = session.get("https://now.httpbin.org")
-        time.sleep(0.7)
-        response_3 = session.get("https://now.httpbin.org")
+        with freeze_time("2012-01-14 12:00:01") as freezer:
+            response_1 = session.get("https://now.httpbin.org")
+            freezer.tick()
 
-        self.assertEqual(response_1.text, response_2.text)
-        self.assertNotEqual(response_2.text, response_3.text)
+            response_2 = session.get("https://now.httpbin.org")
+            freezer.tick()
+
+            response_3 = session.get("https://now.httpbin.org")
+
+            self.assertEqual(response_1.text, response_2.text)
+            self.assertNotEqual(response_2.text, response_3.text)
 
     @httpretty.activate
     def test_default_heuristic(self):
@@ -82,14 +86,21 @@ class TestCachedSession(unittest.TestCase):
 
         session = CachedSession(file_cache_directory=file_cache_directory)
 
-        response_1 = session.get("https://now.httpbin.org")
-        time.sleep(2)
-        response_2 = session.get("https://now.httpbin.org")
-        time.sleep(3.1)
-        response_3 = session.get("https://now.httpbin.org")
+        with freeze_time("2012-01-14 12:00:01") as freezer:
 
-        self.assertEqual(response_1.text, response_2.text)
-        self.assertNotEqual(response_2.text, response_3.text)
+            response_1 = session.get("https://now.httpbin.org")
+            freezer.tick()
+            freezer.tick()
+
+            response_2 = session.get("https://now.httpbin.org")
+            freezer.tick()
+            freezer.tick()
+            freezer.tick()
+
+            response_3 = session.get("https://now.httpbin.org")
+
+            self.assertEqual(response_1.text, response_2.text)
+            self.assertNotEqual(response_2.text, response_3.text)
 
     @httpretty.activate
     def test_cache_control_max_age_overwrites_custom_heuristic(self):
@@ -105,14 +116,16 @@ class TestCachedSession(unittest.TestCase):
 
         session = CachedSession(file_cache_directory=file_cache_directory)
 
-        response_1 = session.get("https://now.httpbin.org")
-        time.sleep(1.1)
-        response_2 = session.get("https://now.httpbin.org")
-        time.sleep(1.1)
-        response_3 = session.get("https://now.httpbin.org")
+        with freeze_time("2012-01-14 12:00:01") as freezer:
 
-        self.assertEqual(response_1.text, response_2.text)
-        self.assertNotEqual(response_2.text, response_3.text)
+            response_1 = session.get("https://now.httpbin.org")
+            freezer.tick()
+            response_2 = session.get("https://now.httpbin.org")
+            freezer.tick()
+            response_3 = session.get("https://now.httpbin.org")
+
+            self.assertEqual(response_1.text, response_2.text)
+            self.assertNotEqual(response_2.text, response_3.text)
 
     @httpretty.activate
     def test_cache_control_no_cache_overwrites_custom_heuristic(self):
@@ -130,9 +143,7 @@ class TestCachedSession(unittest.TestCase):
         # with no-cache set, no request should be cached,
         # thus all bodies are different
         response_1 = session.get("https://now.httpbin.org")
-        time.sleep(0.1)
         response_2 = session.get("https://now.httpbin.org")
-        time.sleep(0.1)
         response_3 = session.get("https://now.httpbin.org")
 
         self.assertNotEqual(response_1.text, response_2.text)
@@ -215,31 +226,33 @@ class TestCachedSession(unittest.TestCase):
         httpretty.register_uri(
             httpretty.GET, "https://now.httpbin.org", body=request_callback
         )
-        session_1 = CachedSession(
-            redis_connection=redis_mock_1, fallback_cache_duration=500
-        )
-        session_2 = CachedSession(
-            redis_connection=redis_mock_2, fallback_cache_duration=1
-        )
 
-        resp_1 = session_1.get("https://now.httpbin.org")
-        resp_2 = session_2.get("https://now.httpbin.org")
+        with freeze_time("2012-01-14 12:00:01") as freezer:
+            session_1 = CachedSession(
+                redis_connection=redis_mock_1, fallback_cache_duration=500
+            )
+            session_2 = CachedSession(
+                redis_connection=redis_mock_2, fallback_cache_duration=1
+            )
 
-        self.assertNotEqual(resp_1.text, resp_2.text)
+            resp_1 = session_1.get("https://now.httpbin.org")
+            resp_2 = session_2.get("https://now.httpbin.org")
 
-        time.sleep(1.1)
+            self.assertNotEqual(resp_1.text, resp_2.text)
 
-        resp_3 = session_2.get("https://now.httpbin.org")
+            freezer.tick()
 
-        self.assertNotEqual(resp_2.text, resp_3.text)
+            resp_3 = session_2.get("https://now.httpbin.org")
 
-        session_3 = CachedSession(
-            redis_connection=redis_mock_1, fallback_cache_duration=1
-        )
+            self.assertNotEqual(resp_2.text, resp_3.text)
 
-        resp_4 = session_3.get("https://now.httpbin.org")
+            session_3 = CachedSession(
+                redis_connection=redis_mock_1, fallback_cache_duration=1
+            )
 
-        self.assertEqual(resp_1.text, resp_4.text)
+            resp_4 = session_3.get("https://now.httpbin.org")
+
+            self.assertEqual(resp_1.text, resp_4.text)
 
 
 if __name__ == "__main__":

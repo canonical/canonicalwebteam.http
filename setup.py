@@ -17,6 +17,7 @@ setup(
     long_description=open("README.rst").read(),
     install_requires=[
         "CacheControl>=0.12.5",
+        "freezegun>=0.3.11",
         "HTTPretty>=0.9.6",
         "lockfile>=0.12.2",
         "mockredispy>=2.9.3",
