@@ -145,10 +145,11 @@ class CachedSession(BaseSession, Session):
         *args,
         **kwargs
     ):
+        super(CachedSession, self).__init__(*args, **kwargs)
+
         heuristic = ExpiresAfterIfNoCacheControl(
             seconds=fallback_cache_duration
         )
-        super(CachedSession, self).__init__(*args, **kwargs)
         cache = FileCache(file_cache_directory)
 
         if redis_connection:

@@ -13,11 +13,13 @@ def datetime_to_header(dt):
     return formatdate(calendar.timegm(dt.timetuple()))
 
 
-def cache_control_value_present_in_response(headers, type):
+def cache_control_in_response_headers(headers):
     """
-    checks if a certain CacheControl header is set in the headers
+    Checks if CacheControl is set in response headers
     """
-    return "cache-control" in headers and type in headers["cache-control"]
+    cache_control = "cache-control" in headers
+    pragma = "pragma" in headers and "no-cache" in headers["pragma"]
+    expires = "expires" in headers
 
 
 class ExpiresAfterIfNoCacheControl(BaseHeuristic):
@@ -29,15 +31,8 @@ class ExpiresAfterIfNoCacheControl(BaseHeuristic):
         self.delta = timedelta(**kw)
 
     def update_headers(self, response):
-        def cc_value_in_response_headers(type):
-            return cache_control_value_present_in_response(
-                response.headers, type
-            )
-
-        if cc_value_in_response_headers(
-            "no-cache"
-        ) or cc_value_in_response_headers("max-age"):
-            return None
+        if cache_directives_in_headers(reponse.headers):
+            return
 
         expires = expire_after(self.delta)
 
@@ -46,9 +41,9 @@ class ExpiresAfterIfNoCacheControl(BaseHeuristic):
             "cache-control": "public",
         }
 
-    def warning(self, response):
-        tmpl = "110 - Automatically cached for %s. Response might be stale"
-        return tmpl % self.delta
+    def warning(self):
+        template = "110 - Automatically cached for %s. Response might be stale"
+        return template % self.delta
 
     def apply(self, response):
         updated_headers = self.update_headers(response)
