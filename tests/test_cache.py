@@ -250,7 +250,7 @@ class TestCachedSession(unittest.TestCase):
 
     def test_timeout_adapter(self):
         session = CachedSession(
-            timeout=1.2, file_cache_directory=file_cache_directory
+            timeout=2, file_cache_directory=file_cache_directory
         )
 
         # this test can be inconsistent on multiple concurrent
@@ -261,7 +261,7 @@ class TestCachedSession(unittest.TestCase):
                 requests.exceptions.ReadTimeout,
             )
         ):
-            session.get("https://httpbin.org/delay/1.5")
+            session.get("https://httpbin.org/delay/3")
 
         resp = session.get("https://httpbin.org/delay/1")
 
