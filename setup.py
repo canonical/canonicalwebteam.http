@@ -24,4 +24,5 @@ setup(
         "redis>=3.0.1",
         "requests>=2.21.0",
     ],
+    test_suite="tests",
 )
