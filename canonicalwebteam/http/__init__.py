@@ -6,11 +6,11 @@ except ImportError:
 
 # Third-party packages
 import requests
-from cachecontrol import CacheControl, CacheControlAdapter
+from cachecontrol import CacheControlAdapter
 from cachecontrol.caches import FileCache
 from cachecontrol.caches.redis_cache import RedisCache
 from canonicalwebteam.http.heuristics import ExpiresAfterIfNoCacheControl
-from requests import adapters, session, Session
+from requests import adapters, Session
 
 try:
     # If prometheus is available, set up metric counters
@@ -51,7 +51,7 @@ class TimeoutHTTPAdapter(adapters.HTTPAdapter):
         return super(TimeoutHTTPAdapter, self).send(*args, **kwargs)
 
 
-class BaseSession(object):
+class BaseSession(Session):
     """
     A base session interface to implement common functionality:
 
@@ -110,13 +110,13 @@ class CacheAdapterWithTimeout(CacheControlAdapter):
 
     def __init__(self, heuristic, cache, timeout=None, *args, **kwargs):
         self.timeout = timeout
-        self.cache_control_adapter = CacheControlAdapter(
-            heuristic=heuristic, cache=cache
+        super(CacheAdapterWithTimeout, self).__init__(
+            cache=cache, heuristic=heuristic, *args, **kwargs
         )
 
     def send(self, *args, **kwargs):
         kwargs["timeout"] = self.timeout
-        return self.cache_control_adapter.send(*args, **kwargs)
+        return super(CacheAdapterWithTimeout, self).send(*args, **kwargs)
 
 
 class CachedSession(BaseSession, Session):

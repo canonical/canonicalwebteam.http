@@ -1,20 +1,18 @@
 import json
 import os
 import shutil
-import struct
+import sys
 import time
 import unittest
-from datetime import timedelta
+import warnings
 from unittest.mock import patch
 
+import httpretty
 import redis
 import requests
 from canonicalwebteam.http import CachedSession
-
-import httpretty
-from cachecontrol.caches.file_cache import FileCache
-from cachecontrol.caches.redis_cache import RedisCache
 from freezegun import freeze_time
+
 from mockredis import mock_redis_client
 
 file_cache_directory = ".testcache"
@@ -39,11 +37,13 @@ class MockRedisSingletons:
 class TestCachedSession(unittest.TestCase):
     mock_redis_singletons = MockRedisSingletons()
 
+    def setUp(self):
+        if not sys.warnoptions:
+            warnings.simplefilter("ignore")
+
     def tearDown(self):
-        try:
+        if os.path.exists(file_cache_directory):
             shutil.rmtree(file_cache_directory)
-        except:
-            pass
 
     @httpretty.activate
     def test_custom_heuristic(self):
@@ -175,10 +175,7 @@ class TestCachedSession(unittest.TestCase):
         self.assertEqual(os.path.isdir(cache_dir_2), True)
         self.assertNotEqual(resp_1.text, resp_2.text)
 
-        try:
-            shutil.rmtree(cache_dir_2)
-        except:
-            pass
+        shutil.rmtree(cache_dir_2)
 
         self.assertEqual(os.path.isdir(cache_dir_2), False)
 
@@ -195,11 +192,8 @@ class TestCachedSession(unittest.TestCase):
 
         self.assertEqual(resp_1.text, resp_4.text)
 
-        try:
-            shutil.rmtree(cache_dir_1)
-            shutil.rmtree(cache_dir_2)
-        except:
-            pass
+        shutil.rmtree(cache_dir_1)
+        shutil.rmtree(cache_dir_2)
 
     @httpretty.activate
     @patch("redis.Redis", mock_redis_singletons.mock_redis_client_singleton)
@@ -253,6 +247,25 @@ class TestCachedSession(unittest.TestCase):
             resp_4 = session_3.get("https://now.httpbin.org")
 
             self.assertEqual(resp_1.text, resp_4.text)
+
+    def test_timeout_adapter(self):
+        session = CachedSession(
+            timeout=1.2, file_cache_directory=file_cache_directory
+        )
+
+        # this test can be inconsistent on multiple concurrent
+        # runs due to the use of time.sleep
+        with self.assertRaises(
+            (
+                requests.exceptions.ConnectTimeout,
+                requests.exceptions.ReadTimeout,
+            )
+        ):
+            session.get("https://httpbin.org/delay/1.5")
+
+        resp = session.get("https://httpbin.org/delay/1")
+
+        self.assertIsNotNone(resp)
 
 
 if __name__ == "__main__":

@@ -54,7 +54,7 @@ class ExpiresAfterIfNoCacheControl(BaseHeuristic):
             "cache-control": "public",
         }
 
-    def warning(self,response):
+    def warning(self, response):
         """
         Adds a warning to the response as defined in rfc7234 section 5.5
         :param response: The response object to be manipulated.
