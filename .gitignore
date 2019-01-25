@@ -8,3 +8,7 @@ pytestdebug.log
 .coverage
 htmlcov/
 *.pyc
+Pipfile
+.webcache
+.testcache
+build/
