@@ -1,14 +1,8 @@
----
-
 version: 2
 
 defaults: &defaults
   docker:
     - image: canonicalwebteam/dev
-  environment:
-    BLOG_ENABLED: True
-    WEBAPP: snapcraft
-  working_directory: /srv
 
 jobs:
   python-lint:
@@ -27,5 +21,3 @@ workflows:
   build:
     jobs:
       - python-lint
-
----
