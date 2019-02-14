@@ -13,7 +13,7 @@ def datetime_to_HTTP_date(date_and_time):
     """
     Returns a HTTP-date as defined in rfc7234 section 5.3
     for a datetime object"""
-    locale.setlocale(locale.LC_ALL, "en_GB.utf8")
+    locale.setlocale(locale.LC_ALL, "")
 
     return datetime.astimezone(date_and_time).strftime(
         "%a, %d %b %Y %H:%M:%S %Z"
