@@ -7,3 +7,4 @@ v0.1.4, 2018-07-10 -- More python2 support
 v0.1.5, 2018-07-10 -- Ditto
 v0.1.6, 2018-08-01 -- Fix "domain undefined" error
 v1.0.0, 2019-01-16 -- Adds CacheControl awareness to cached sessions
+v1.0.1, 2019-02-14 -- Uses sytem locale instead of setting explicitely
