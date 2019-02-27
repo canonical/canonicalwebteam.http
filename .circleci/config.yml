@@ -1,31 +1,33 @@
----
-
 version: 2
 
 defaults: &defaults
   docker:
     - image: canonicalwebteam/dev
-  environment:
-    BLOG_ENABLED: True
-    WEBAPP: snapcraft
   working_directory: /srv
 
 jobs:
-  python-lint:
+  lint-python:
     <<: *defaults
     steps:
       - checkout
       - run:
-          name: Install dependencies
-          command: pip3 install flake8
+          name: Lint webapp with Flake8 and black
+          command: flake8 canonicalwebteam tests && black --line-length 79 --check canonicalwebteam tests
+  test-python:
+    <<: *defaults
+    steps:
+      - checkout
       - run:
-          name: Lint webapp with Flake8
-          command: flake8
+          name: Print env
+          command: env
+      - run:
+          name: Run Python tests
+          command: ./setup.py test
 
 workflows:
   version: 2
   build:
     jobs:
-      - python-lint
+      - lint-python
+      - test-python
 
----
