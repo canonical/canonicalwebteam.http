@@ -1,7 +1,9 @@
-import locale
+# Standard library
 import unittest
+import time
 from datetime import datetime, timedelta
 
+# Local modules
 from canonicalwebteam.http import heuristics
 
 
@@ -16,11 +18,11 @@ class TestHeuristics(unittest.TestCase):
         )
 
     def test_datetime_to_header_string(self):
-        locale.setlocale(locale.LC_ALL, "en_GB.utf8")
-        date_string = "Thu, 01 Dec 1994 16:00:00 GMT"
-        date = datetime.strptime(date_string, "%a, %d %b %Y %H:%M:%S %Z")
+        expected_result = "Thu, 01 Dec 1994 16:00:00 " + time.tzname[0]
+        date = datetime.strptime(expected_result, "%a, %d %b %Y %H:%M:%S %Z")
+        function_result = heuristics.datetime_to_HTTP_date(date)
 
-        self.assertEqual(date_string, heuristics.datetime_to_HTTP_date(date))
+        self.assertEqual(expected_result, function_result)
 
     def test_cache_directives_in_headers(self):
         headers = {}
