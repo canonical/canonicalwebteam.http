@@ -10,6 +10,7 @@ from cachecontrol import CacheControlAdapter
 from cachecontrol.caches import FileCache
 from cachecontrol.caches.redis_cache import RedisCache
 from canonicalwebteam.http.heuristics import ExpiresAfterIfNoCacheControl
+from pybreaker import CircuitBreaker
 from requests import adapters, Session
 
 try:
@@ -59,7 +60,9 @@ class BaseSession(Session):
     - headers: Additional headers to add to all outgoing requests
     """
 
-    def __init__(self, timeout=(0.5, 3), headers={}, *args, **kwargs):
+    def __init__(
+        self, timeout=(0.5, 3), headers={}, api_breaker=True, *args, **kwargs
+    ):
         super(BaseSession, self).__init__(*args, **kwargs)
 
         self.mount("http://", TimeoutHTTPAdapter(timeout=timeout))
@@ -67,12 +70,20 @@ class BaseSession(Session):
 
         self.headers.update(headers)
 
+        self.api_breaker = (
+            CircuitBreaker(fail_max=5, reset_timeout=60)
+            if api_breaker
+            else None
+        )
+
     def request(self, method, url, **kwargs):
         domain = urlparse(url).netloc
-
         try:
-            request = super(BaseSession, self).request(
-                method=method, url=url, **kwargs
+            fn = super(BaseSession, self).request
+            response = (
+                self.api_breaker.call(fn, method=method, url=url, **kwargs)
+                if self.api_breaker
+                else fn(method=method, url=url, **kwargs)
             )
         except requests.exceptions.Timeout as timeout_error:
             if TIMEOUT_COUNTER:
@@ -87,10 +98,10 @@ class BaseSession(Session):
 
         if LATENCY_HISTOGRAM:
             LATENCY_HISTOGRAM.labels(
-                domain=domain, code=request.status_code
-            ).observe(request.elapsed.total_seconds())
+                domain=domain, code=response.status_code
+            ).observe(response.elapsed.total_seconds())
 
-        return request
+        return response
 
 
 class UncachedSession(BaseSession, Session):
@@ -143,7 +154,7 @@ class CachedSession(BaseSession, Session):
         file_cache_directory=".webcache",
         timeout=(0.5, 3),
         *args,
-        **kwargs
+        **kwargs,
     ):
         super(CachedSession, self).__init__(*args, **kwargs)
 
