@@ -3,9 +3,9 @@ canonicalwebteam.http
 
 A Python library for making HTTP requests with sensible defaults
 
-.. image:: https://travis-ci.org/canonical-webteam/http.svg?branch=master
-   :alt: build status
-   :target: https://travis-ci.org/canonical-webteam/http
+.. image:: https://github.com/canonical-web-and-design/canonicalwebteam.http/workflows/Tests/badge.svg
+   :alt: Tests status
+   :target: https://github.com/canonical-web-and-design/canonicalwebteam.http/actions?query=workflow%3ATests
 
 Installation
 ------------
