@@ -14,7 +14,8 @@ setup(
         "For making HTTP requests "
         "with helpful defaults for Canonical's webteam."
     ),
-    long_description=open("README.rst").read(),
+    long_description=open("README.md").read(),
+    long_description_content_type="text/markdown",
     install_requires=[
         "CacheControl>=0.12.5",
         "freezegun>=0.3.11",
