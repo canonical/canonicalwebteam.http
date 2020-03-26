@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="canonicalwebteam.http",
-    version="1.0.1",
+    version="1.0.2",
     author="Canonical webteam",
     author_email="webteam@canonical.com",
     url="https://github.com/canonical-webteam/http",
@@ -19,7 +19,7 @@ setup(
     install_requires=[
         "CacheControl>=0.12.5",
         "freezegun>=0.3.11",
-        "HTTPretty>=0.9.6",
+        "HTTPretty>=0.9.6,<1",
         "lockfile>=0.12.2",
         "mockredispy>=2.9.3",
         "redis>=3.0.1",
