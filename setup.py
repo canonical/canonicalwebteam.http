@@ -19,7 +19,7 @@ setup(
     install_requires=[
         "CacheControl>=0.12.5",
         "freezegun>=0.3.11",
-        "HTTPretty>=0.9.6,<1",
+        "HTTPretty>=1.0.2",
         "lockfile>=0.12.2",
         "mockredispy>=2.9.3",
         "redis>=3.0.1",
